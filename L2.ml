@@ -8,7 +8,22 @@ type tipo =
   | TyBool
   | TyRef of tipo
   | TyUnit
-    
+  
+(*Serve pra converter um tipo do tipo tipo em
+uma string legível e facilitar testes*)
+let rec string_of_tipo t =
+  match t with
+  | TyInt -> "int"
+  | TyBool -> "bool"
+  | TyUnit -> "unit"
+  | TyRef t' -> "ref " ^ string_of_tipo t'
+
+
+
+
+(*O context é um ambiente que associa
+variáveis a seus tipos, Γ (Gama) *)
+type context = (string * tipo) list
 
 type expr = 
   | Num of int
@@ -27,22 +42,83 @@ type expr =
   | Print of expr
   
       
+let rec typeinfer (ctx: context) (e: expr) : tipo = 
+  match e with
+    | Num _ -> TyInt    (* (T-int)  *)
+    | Bool _ -> TyBool  (* (T-bool) *)
+    | Unit -> TyUnit    (* (T-unit) *)
+    
+    
+    | Id x -> (* (T-var) *)
+      (*List.assoc is a standard function in OCaml, List module*)
+      (try List.assoc x ctx 
+        with Not_found -> failwith ("Variável "^ x ^ " não declarada"))
 
-          
-          (*         
-           
-            let  x: int     =  read() in 
-            let  z: ref int = new x in 
-            let  y: ref int = new 1 in 
-            
-            (while (!z > 0) (
-                   y :=  !y * !z;
-                   z :=  !z - 1);
-            print (! y))     
+    | Binop (op, e1, e2) -> (* (T-op+) e (T-op<) *)
+      let tipo_e1 = typeinfer ctx e1 in
+      let tipo_e2 = typeinfer ctx e2 in
+      (match op, tipo_e1, tipo_e2 with
+        | (Sum | Sub | Mul | Div), TyInt, TyInt -> TyInt       (* Seria a (T-op+) do pdf mas aqui incluo todas ARITMÉTICAS(tem que resolver a exceção do div???) *)
+        | (Eq | Neq | Lt | Gt), TyInt, TyInt -> TyBool         (*Seria a (T-op<) mas aqui incluo todas RELACIONAIS *)
+        | (And | Or), TyBool, TyBool -> TyBool                 (*Não tem uma regra na especificação pras LÓGICAS *)
+        | _ -> failwith "Erro de tipo na operação binária")      
 
-*)
+    | If (e1, e2, e3) -> (* (T-if) *)
+      let tipo_e1 = typeinfer ctx e1 in 
+        if tipo_e1 <> TyBool then failwith "Condição do if deve ser bool";
+      let tipo_e2 = typeinfer ctx e2 in 
+      let tipo_e3 = typeinfer ctx e3 in 
+      
+      if tipo_e2 = tipo_e3 then tipo_e2 else failwith "Os dois ramos precisam ser do mesmo tipo";
 
+    | Let (x, tipo_x, e1, e2) -> (* (T-let)*)
+      let tipo_e1 = typeinfer ctx e1 in
+      if tipo_e1 <> tipo_x then
+        failwith ("Let: tipo declarado "^ string_of_tipo tipo_x ^
+                " não bate com tipo inferido " ^ string_of_tipo tipo_e1)
+      else
+        let ctx' = (x, tipo_x) :: ctx in 
+        typeinfer ctx' e2
+    | New (e1) ->   (* (T-new)*)
+        let tipo_e1  = typeinfer ctx e1 in 
+        TyRef tipo_e1
 
+    | Deref (e1) ->   (* (T-deref) *)
+        let tipo_e1 = typeinfer ctx e1 in
+        (match tipo_e1 with
+          | TyRef tipo_referenciado -> tipo_referenciado
+          | _ -> failwith "Erro: espera uma referência (ref T)"
+        )
+    
+    | Asg (e1, e2) ->   (* (T-atr) *)
+        let tipo_e1 = typeinfer ctx e1 in
+        let tipo_e2 = typeinfer ctx e2 in
+        (match tipo_e1 with
+          | TyRef tipo_referenciado ->
+              if tipo_referenciado = tipo_e2 then TyUnit
+              else failwith "Tipo incompatível: valor não corresponde ao tipo da referência"
+          | _ -> failwith "Erro: tentativa de atribuir a algo que não é referência")
+
+    | Wh (e1, e2) ->    (* (T-while) *)
+        let tipo_e1 = typeinfer ctx e1 in
+        let tipo_e2 = typeinfer ctx e2 in
+        if (tipo_e1 <> TyBool) then failwith "condição deve ser do tipo TyBool"
+          else
+            if (tipo_e2 <> TyUnit) then failwith "o corpo do while deve ser Unit "
+            else TyUnit
+    
+    | Seq (e1, e2) ->  (* (T-seq) *)
+        let tipo_e1 = typeinfer ctx e1 in
+        if tipo_e1 <> TyUnit then failwith "O primeiro termo da sequência deve ser unit"
+        else typeinfer ctx e2
+
+    | Read -> TyInt  (* (T-read) *)
+    
+    | Print (e1) ->   (* (T-print) *)
+        let tipo_e1 = typeinfer ctx e1 in
+        if tipo_e1 <> TyInt then failwith "termo a imprimir deve ser int"
+        else TyUnit
+        
 
 let cndwhi = Binop(Gt, Deref (Id "z"),Num 0)
 let asgny = Asg(Id "y", Binop(Mul, Deref (Id "y"),Deref(Id "z")))
@@ -57,6 +133,18 @@ let fat = Let("x", TyInt, Read,
                   Let("y", TyRef TyInt, New (Num 1),
                       seq)))
         
+
   
-  
-    
+          (*         
+           
+            let  x: int     =  read() in 
+            let  z: ref int = new x in 
+            let  y: ref int = new 1 in 
+            
+            (while (!z > 0) (
+                   y :=  !y * !z;
+                   z :=  !z - 1);
+            print (! y))     
+
+*)    
+
