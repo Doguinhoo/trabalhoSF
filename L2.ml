@@ -34,12 +34,21 @@ type expr =
   | Wh of expr * expr 
   | Asg of expr * expr 
   | Let of string * tipo * expr * expr 
+  | Loc of int
   | New of expr
   | Deref of expr 
   | Unit
   | Seq of expr * expr
   | Read
   | Print of expr
+
+let is_value (e: expr): bool =
+  match e with
+    | Num _ -> true
+    | Bool _ -> true
+    | Unit -> true
+    | Loc _ -> true
+    | _ -> false
   
       
 let rec typeinfer (ctx: context) (e: expr) : tipo = 
@@ -118,7 +127,49 @@ let rec typeinfer (ctx: context) (e: expr) : tipo =
         let tipo_e1 = typeinfer ctx e1 in
         if tipo_e1 <> TyInt then failwith "termo a imprimir deve ser int"
         else TyUnit
-        
+    | Loc (_) -> failwith "Localizão sem tipo"
+
+let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (expr * expr list * int list * int list) option =
+  match e with
+    | Binop (op, op1, op2) when is_value op1 && is_value op2 -> (match (op, op1, op2) with (* op *)
+      | (Sum, Num int1, Num int2) -> Some(Num (int1 + int2), mem, input, output)
+      | (Sub, Num int1, Num int2) -> Some(Num (int1 - int2), mem, input, output)
+      | (Mul, Num int1, Num int2) -> Some(Num (int1 * int2), mem, input, output)
+      (* | (Div, Num int1, Num int2) -> Some(Num (int1 / int2), mem, input, output) *)
+      | (Eq, Num int1, Num int2) -> Some(Bool (int1 == int2), mem, input, output)
+      | (Neq, Num int1, Num int2) -> Some(Bool (int1 != int2), mem, input, output)
+      | (Lt, Num int1, Num int2) -> Some(Bool (int1 < int2), mem, input, output)
+      | (Gt, Num int1, Num int2) -> Some(Bool (int1 > int2), mem, input, output)
+      | (And, Bool bool1, Bool bool2) -> Some(Bool (bool1 && bool2), mem, input, output)
+      | (Or, Bool bool1, Bool bool2) -> Some(Bool (bool1 || bool2), mem, input, output)
+      | _ -> None)
+    | Binop (op, op1, op2) when is_value op1 -> (match step op2 mem input output with (* op2 *)
+      | Some(new_op2, new_mem, new_input, new_output) -> Some(Binop (op, op1, new_op2), new_mem, new_input, new_output)
+      | None -> None)
+    | Binop (op, op1, op2) -> (match step op2 mem input output with (* op1 *)
+      | Some(new_op2, new_mem, new_input, new_output) -> Some(Binop (op, op1, new_op2), new_mem, new_input, new_output)
+      | None -> None)
+    | If (Bool true, e2, e3) -> Some(e2, mem, input, output)
+    | If (Bool false, e2, e3) -> Some(e3, mem, input, output)
+    | _ -> None
+    (* if1 *)
+    (* if2 *)
+    (* if3 *)
+    (* e-let1 *)
+    (* e-let2 *)
+    (* atr1 *)
+    (* atr2 *)
+    (* atr *)
+    (* deref1 *)
+    (* deref *)
+    (* new1 *)
+    (* new *)
+    (* seq1 *)
+    (* seq *)
+    (* e-while *)
+    (* print-n *)
+    (* print *)
+    (* read *)
 
 let cndwhi = Binop(Gt, Deref (Id "z"),Num 0)
 let asgny = Asg(Id "y", Binop(Mul, Deref (Id "y"),Deref(Id "z")))
