@@ -137,6 +137,25 @@ let rec set_nth_opt (list: 'a list) (index: int) (value: 'a): ('a list) option =
     | None -> None)
   | _ -> None
 
+let rec subs (e1: expr) (x: string) (e2: expr): expr =
+  match e2 with
+  | Num (i) -> Num (i)
+  | Bool (b) -> Bool (b)
+  | Id (y) when x == y -> e1
+  | Id (y) -> Id (y)
+  | If (le1, le2, le3) -> If (subs e1 x le1, subs e1 x le2, subs e1 x le3)
+  | Binop (bop, le1, le2) -> Binop (bop, subs e1 x le1, subs e1 x le2)
+  | Wh (le1, le2) -> Wh (subs e1 x le1, subs e1 x le2)
+  | Asg (le1, le2) -> Asg (subs e1 x le1, subs e1 x le2)
+  | Let (y, t, le1, le2) -> Let (y, t, subs e1 x le1, subs e1 x le2)
+  | Loc (i) -> Loc(i)
+  | New (le) -> New (subs e1 x le)
+  | Deref (le) -> Deref (subs e1 x le)
+  | Unit -> Unit
+  | Seq (le1, le2) -> Seq (subs e1 x le1, subs e1 x le2)
+  | Read -> Read
+  | Print (le) -> Print (subs e1 x le)
+
 let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (expr * expr list * int list * int list) option =
   match e with
     | Binop (op, op1, op2) when is_value op1 && is_value op2 -> (match (op, op1, op2) with (* op* *)
@@ -171,10 +190,10 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
       | Some(new_e1, new_mem, new_input, new_output) -> Some(If (new_e1, e2, e3), new_mem, new_input, new_output)
       | None -> None)
 
-    (* e-let2 *)
+    | Let (x, t, e1, e2) when is_value e1 -> Some(subs e1 x e2, mem, input, output) (* e-let2 *)
     
-    | Let (id, tipo, e1, e2) -> (match step e1 mem input output with (* e-let1 *)
-        | Some(new_e1, new_mem, new_input, new_output) -> Some(Let (id, tipo, new_e1, e2), new_mem, new_input, new_output)
+    | Let (x, t, e1, e2) -> (match step e1 mem input output with (* e-let1 *)
+        | Some(new_e1, new_mem, new_input, new_output) -> Some(Let (x, t, new_e1, e2), new_mem, new_input, new_output)
         | None -> None)
 
     | Asg (Loc index, e2) when is_value e2 -> (match set_nth_opt mem index e2 with (* atr1 *)
