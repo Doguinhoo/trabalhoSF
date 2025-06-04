@@ -129,6 +129,14 @@ let rec typeinfer (ctx: context) (e: expr) : tipo =
         else TyUnit
     | Loc (_) -> failwith "Localizão sem tipo"
 
+let rec set_nth_opt (list: 'a list) (index: int) (value: 'a): ('a list) option =
+  match (index, list) with
+  | (0, old_value :: tail) -> Some(value :: tail)
+  | (x, head :: tail) when x > 0 -> (match set_nth_opt tail (x - 1) value with
+    | Some(new_tail) -> Some(head :: new_tail)
+    | None -> None)
+  | _ -> None
+
 let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (expr * expr list * int list * int list) option =
   match e with
     | Binop (op, op1, op2) when is_value op1 && is_value op2 -> (match (op, op1, op2) with (* op* *)
@@ -136,12 +144,15 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
       | (Sub, Num int1, Num int2) -> Some(Num (int1 - int2), mem, input, output)
       | (Mul, Num int1, Num int2) -> Some(Num (int1 * int2), mem, input, output)
       (* | (Div, Num int1, Num int2) -> Some(Num (int1 / int2), mem, input, output) *)
+
       | (Eq, Num int1, Num int2) -> Some(Bool (int1 == int2), mem, input, output)
       | (Neq, Num int1, Num int2) -> Some(Bool (int1 != int2), mem, input, output)
       | (Lt, Num int1, Num int2) -> Some(Bool (int1 < int2), mem, input, output)
       | (Gt, Num int1, Num int2) -> Some(Bool (int1 > int2), mem, input, output)
+
       | (And, Bool bool1, Bool bool2) -> Some(Bool (bool1 && bool2), mem, input, output)
       | (Or, Bool bool1, Bool bool2) -> Some(Bool (bool1 || bool2), mem, input, output)
+
       | _ -> None)
 
     | Binop (op, op1, op2) when is_value op1 -> (match step op2 mem input output with (* op2 *)
@@ -166,7 +177,9 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
         | Some(new_e1, new_mem, new_input, new_output) -> Some(Let (id, tipo, new_e1, e2), new_mem, new_input, new_output)
         | None -> None)
 
-    (* atr1 *)
+    | Asg (Loc index, e2) when is_value e2 -> (match set_nth_opt mem index e2 with (* atr1 *)
+        | Some(new_mem) -> Some(Unit, new_mem, input, output)
+        | None -> None) 
 
     | Asg (Loc index, e2) -> (match step e2 mem input output with (* atr2 *)
       | Some(new_e2, new_mem, new_input, new_output) -> Some(Asg (Loc index, new_e2), new_mem, new_input, new_output)
@@ -176,13 +189,15 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
       | Some(new_e1, new_mem, new_input, new_output) -> Some(Asg (new_e1, e2), new_mem, new_input, new_output)
       | None -> None)
 
-    (* deref1 *)
+    | Deref (Loc index) -> (match List.nth_opt mem index with (* deref1 *)
+      | Some(value) -> Some(value, mem, input, output)
+      | None -> None)
 
     | Deref (e) -> (match step e mem input output with (* deref *)
       | Some(new_e, new_mem, new_input, new_output) -> Some(Deref (new_e), new_mem, new_input, new_output)
       | None -> None)
 
-    (* new1 *)
+    | New (e) when is_value e -> Some(Num (List.length mem), List.append mem [e], input, output) (* new1 *)
 
     | New (e) -> (match step e mem input output with (* new *)
       | Some(new_e, new_mem, new_input, new_output) -> Some(New (new_e), new_mem, new_input, new_output)
@@ -202,7 +217,9 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
       | Some(new_e, new_mem, new_input, new_output) -> Some(Print(new_e), new_mem, new_input, new_output)
       | None -> None)
 
-    (* read *)
+    | Read -> (match input with (* read *)
+      | value :: tail -> Some(Num value, mem, tail, output)
+      | _ -> None)
 
     | _ -> None
 
