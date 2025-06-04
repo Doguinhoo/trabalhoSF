@@ -131,7 +131,7 @@ let rec typeinfer (ctx: context) (e: expr) : tipo =
 
 let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (expr * expr list * int list * int list) option =
   match e with
-    | Binop (op, op1, op2) when is_value op1 && is_value op2 -> (match (op, op1, op2) with (* op *)
+    | Binop (op, op1, op2) when is_value op1 && is_value op2 -> (match (op, op1, op2) with (* op* *)
       | (Sum, Num int1, Num int2) -> Some(Num (int1 + int2), mem, input, output)
       | (Sub, Num int1, Num int2) -> Some(Num (int1 - int2), mem, input, output)
       | (Mul, Num int1, Num int2) -> Some(Num (int1 * int2), mem, input, output)
@@ -143,33 +143,68 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
       | (And, Bool bool1, Bool bool2) -> Some(Bool (bool1 && bool2), mem, input, output)
       | (Or, Bool bool1, Bool bool2) -> Some(Bool (bool1 || bool2), mem, input, output)
       | _ -> None)
+
     | Binop (op, op1, op2) when is_value op1 -> (match step op2 mem input output with (* op2 *)
       | Some(new_op2, new_mem, new_input, new_output) -> Some(Binop (op, op1, new_op2), new_mem, new_input, new_output)
       | None -> None)
+
     | Binop (op, op1, op2) -> (match step op2 mem input output with (* op1 *)
       | Some(new_op2, new_mem, new_input, new_output) -> Some(Binop (op, op1, new_op2), new_mem, new_input, new_output)
       | None -> None)
-    | If (Bool true, e2, e3) -> Some(e2, mem, input, output)
-    | If (Bool false, e2, e3) -> Some(e3, mem, input, output)
-    | _ -> None
-    (* if1 *)
-    (* if2 *)
-    (* if3 *)
-    (* e-let1 *)
+      
+    | If (Bool true, e2, e3) -> Some(e2, mem, input, output) (* if1 *)
+
+    | If (Bool false, e2, e3) -> Some(e3, mem, input, output) (* if2 *)
+
+    | If (e1, e2, e3) -> (match step e1 mem input output with (* if3 *)
+      | Some(new_e1, new_mem, new_input, new_output) -> Some(If (new_e1, e2, e3), new_mem, new_input, new_output)
+      | None -> None)
+
     (* e-let2 *)
+    
+    | Let (id, tipo, e1, e2) -> (match step e1 mem input output with (* e-let1 *)
+        | Some(new_e1, new_mem, new_input, new_output) -> Some(Let (id, tipo, new_e1, e2), new_mem, new_input, new_output)
+        | None -> None)
+
     (* atr1 *)
-    (* atr2 *)
-    (* atr *)
+
+    | Asg (Loc index, e2) -> (match step e2 mem input output with (* atr2 *)
+      | Some(new_e2, new_mem, new_input, new_output) -> Some(Asg (Loc index, new_e2), new_mem, new_input, new_output)
+      | None -> None)
+
+    | Asg (e1, e2) -> (match step e1 mem input output with (* atr *)
+      | Some(new_e1, new_mem, new_input, new_output) -> Some(Asg (new_e1, e2), new_mem, new_input, new_output)
+      | None -> None)
+
     (* deref1 *)
-    (* deref *)
+
+    | Deref (e) -> (match step e mem input output with (* deref *)
+      | Some(new_e, new_mem, new_input, new_output) -> Some(Deref (new_e), new_mem, new_input, new_output)
+      | None -> None)
+
     (* new1 *)
-    (* new *)
-    (* seq1 *)
-    (* seq *)
-    (* e-while *)
-    (* print-n *)
-    (* print *)
+
+    | New (e) -> (match step e mem input output with (* new *)
+      | Some(new_e, new_mem, new_input, new_output) -> Some(New (new_e), new_mem, new_input, new_output)
+      | None -> None)
+
+    | Seq (Unit, e2) -> Some(e2, mem, input, output) (* seq1 *)
+
+    | Seq (e1, e2) -> (match step e1 mem input output with (* seq *)
+      | Some(new_e1, new_mem, new_input, new_output) -> Some(Seq(new_e1, e2), new_mem, new_input, new_output)
+      | None -> None)
+
+    | Wh (e1, e2) -> Some(If (e1, Seq (e2, Wh (e1, e2)), Unit), mem, input, output) (* e-while *)
+    
+    | Print (Num int) -> Some(Unit, mem, input, output @ [int]) (* print-n *)
+
+    | Print (e) -> (match step e mem input output with (* print *)
+      | Some(new_e, new_mem, new_input, new_output) -> Some(Print(new_e), new_mem, new_input, new_output)
+      | None -> None)
+
     (* read *)
+
+    | _ -> None
 
 let cndwhi = Binop(Gt, Deref (Id "z"),Num 0)
 let asgny = Asg(Id "y", Binop(Mul, Deref (Id "y"),Deref(Id "z")))
