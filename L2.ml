@@ -141,7 +141,7 @@ let rec subs (e1: expr) (x: string) (e2: expr): expr =
   match e2 with
   | Num (i) -> Num (i)
   | Bool (b) -> Bool (b)
-  | Id (y) when x == y -> e1
+  | Id (y) when String.equal x y -> e1
   | Id (y) -> Id (y)
   | If (le1, le2, le3) -> If (subs e1 x le1, subs e1 x le2, subs e1 x le3)
   | Binop (bop, le1, le2) -> Binop (bop, subs e1 x le1, subs e1 x le2)
@@ -178,8 +178,8 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
       | Some(new_op2, new_mem, new_input, new_output) -> Some(Binop (op, op1, new_op2), new_mem, new_input, new_output)
       | None -> None)
 
-    | Binop (op, op1, op2) -> (match step op2 mem input output with (* op1 *)
-      | Some(new_op2, new_mem, new_input, new_output) -> Some(Binop (op, op1, new_op2), new_mem, new_input, new_output)
+    | Binop (op, op1, op2) -> (match step op1 mem input output with (* op1 *)
+      | Some(new_op1, new_mem, new_input, new_output) -> Some(Binop (op, new_op1, op2), new_mem, new_input, new_output)
       | None -> None)
       
     | If (Bool true, e2, e3) -> Some(e2, mem, input, output) (* if1 *)
@@ -216,7 +216,7 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
       | Some(new_e, new_mem, new_input, new_output) -> Some(Deref (new_e), new_mem, new_input, new_output)
       | None -> None)
 
-    | New (e) when is_value e -> Some(Num (List.length mem), List.append mem [e], input, output) (* new1 *)
+    | New (e) when is_value e -> Some(Loc (List.length mem), List.append mem [e], input, output) (* new1 *)
 
     | New (e) -> (match step e mem input output with (* new *)
       | Some(new_e, new_mem, new_input, new_output) -> Some(New (new_e), new_mem, new_input, new_output)
@@ -241,6 +241,21 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
       | _ -> None)
 
     | _ -> None
+
+let rec steps (e: expr) (mem: expr list) (input: int list) (output: int list): (expr * expr list * int list * int list) =
+  match step e mem input output with
+  | Some(e', mem', input', output') -> steps e' mem' input' output'
+  | None -> e, mem, input, output
+
+let rec steps_list (e: expr) (mem: expr list) (input: int list) (output: int list): (expr * expr list * int list * int list) list =
+  (e, mem, input, output) :: match step e mem input output with
+  | Some(e', mem', input', output') ->  (steps_list e' mem' input' output')
+  | None -> []
+
+let call_expr (e: expr) (input: int list): (int list) option =
+  let (e', final_mem, input', output) = steps e [] input [] in
+    if e' == Unit then Some(output)
+    else None
 
 let cndwhi = Binop(Gt, Deref (Id "z"),Num 0)
 let asgny = Asg(Id "y", Binop(Mul, Deref (Id "y"),Deref(Id "z")))
@@ -269,4 +284,3 @@ let fat = Let("x", TyInt, Read,
             print (! y))     
 
 *)    
-
