@@ -1,7 +1,7 @@
 type bop =  
   | Sum | Sub | Mul | Div   (* operações aritméticas *)
   | Eq  | Neq | Lt | Gt   (* operações relacionais  *)
-  | And | Or   (* operações lógicas *) 
+  | And | Or   (* operações lógicas *)
 
 type tipo = 
   | TyInt
@@ -137,11 +137,11 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
       | _ -> None)
 
     | Binop (op, op1, op2) when is_value op1 -> (match step op2 mem input output with (* op2 *)
-      | Some(new_op2, new_mem, new_input, new_output) -> Some(Binop (op, op1, new_op2), new_mem, new_input, new_output)
+      | Some(op2', mem', input', output') -> Some(Binop (op, op1, op2'), mem', input', output')
       | None -> None)
 
     | Binop (op, op1, op2) -> (match step op1 mem input output with (* op1 *)
-      | Some(new_op1, new_mem, new_input, new_output) -> Some(Binop (op, new_op1, op2), new_mem, new_input, new_output)
+      | Some(op1', mem', input', output') -> Some(Binop (op, op1', op2), mem', input', output')
       | None -> None)
       
     | If (Bool true, e2, e3) -> Some(e2, mem, input, output) (* if1 *)
@@ -149,25 +149,25 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
     | If (Bool false, e2, e3) -> Some(e3, mem, input, output) (* if2 *)
 
     | If (e1, e2, e3) -> (match step e1 mem input output with (* if3 *)
-      | Some(new_e1, new_mem, new_input, new_output) -> Some(If (new_e1, e2, e3), new_mem, new_input, new_output)
+      | Some(e1', mem', input', output') -> Some(If (e1', e2, e3), mem', input', output')
       | None -> None)
 
     | Let (x, t, e1, e2) when is_value e1 -> Some(subs e1 x e2, mem, input, output) (* e-let2 *)
     
     | Let (x, t, e1, e2) -> (match step e1 mem input output with (* e-let1 *)
-        | Some(new_e1, new_mem, new_input, new_output) -> Some(Let (x, t, new_e1, e2), new_mem, new_input, new_output)
+        | Some(e1', mem', input', output') -> Some(Let (x, t, e1', e2), mem', input', output')
         | None -> None)
 
     | Asg (Loc index, e2) when is_value e2 -> (match set_nth_opt mem index e2 with (* atr1 *)
-        | Some(new_mem) -> Some(Unit, new_mem, input, output)
+        | Some(mem') -> Some(Unit, mem', input, output)
         | None -> None) 
 
     | Asg (Loc index, e2) -> (match step e2 mem input output with (* atr2 *)
-      | Some(new_e2, new_mem, new_input, new_output) -> Some(Asg (Loc index, new_e2), new_mem, new_input, new_output)
+      | Some(e2', mem', input', output') -> Some(Asg (Loc index, e2'), mem', input', output')
       | None -> None)
 
     | Asg (e1, e2) -> (match step e1 mem input output with (* atr *)
-      | Some(new_e1, new_mem, new_input, new_output) -> Some(Asg (new_e1, e2), new_mem, new_input, new_output)
+      | Some(e1', mem', input', output') -> Some(Asg (e1', e2), mem', input', output')
       | None -> None)
 
     | Deref (Loc index) -> (match List.nth_opt mem index with (* deref1 *)
@@ -175,19 +175,19 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
       | None -> None)
 
     | Deref (e) -> (match step e mem input output with (* deref *)
-      | Some(new_e, new_mem, new_input, new_output) -> Some(Deref (new_e), new_mem, new_input, new_output)
+      | Some(e', mem', input', output') -> Some(Deref (e'), mem', input', output')
       | None -> None)
 
     | New (e) when is_value e -> Some(Loc (List.length mem), List.append mem [e], input, output) (* new1 *)
 
     | New (e) -> (match step e mem input output with (* new *)
-      | Some(new_e, new_mem, new_input, new_output) -> Some(New (new_e), new_mem, new_input, new_output)
+      | Some(e', mem', input', output') -> Some(New (e'), mem', input', output')
       | None -> None)
 
     | Seq (Unit, e2) -> Some(e2, mem, input, output) (* seq1 *)
 
     | Seq (e1, e2) -> (match step e1 mem input output with (* seq *)
-      | Some(new_e1, new_mem, new_input, new_output) -> Some(Seq(new_e1, e2), new_mem, new_input, new_output)
+      | Some(e1', mem', input', output') -> Some(Seq(e1', e2), mem', input', output')
       | None -> None)
 
     | Wh (e1, e2) -> Some(If (e1, Seq (e2, Wh (e1, e2)), Unit), mem, input, output) (* e-while *)
@@ -195,7 +195,7 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
     | Print (Num int) -> Some(Unit, mem, input, output @ [int]) (* print-n *)
 
     | Print (e) -> (match step e mem input output with (* print *)
-      | Some(new_e, new_mem, new_input, new_output) -> Some(Print(new_e), new_mem, new_input, new_output)
+      | Some(e', mem', input', output') -> Some(Print(e'), mem', input', output')
       | None -> None)
 
     | Read -> (match input with (* read *)
