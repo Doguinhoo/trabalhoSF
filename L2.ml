@@ -8,22 +8,6 @@ type tipo =
   | TyBool
   | TyRef of tipo
   | TyUnit
-  
-(*Serve pra converter um tipo do tipo tipo em
-uma string legível e facilitar testes*)
-let rec string_of_tipo t =
-  match t with
-  | TyInt -> "int"
-  | TyBool -> "bool"
-  | TyUnit -> "unit"
-  | TyRef t' -> "ref " ^ string_of_tipo t'
-
-
-
-
-(*O context é um ambiente que associa
-variáveis a seus tipos, Γ (Gama) *)
-type context = (string * tipo) list
 
 type expr = 
   | Num of int
@@ -49,85 +33,63 @@ let is_value (e: expr): bool =
     | Unit -> true
     | Loc _ -> true
     | _ -> false
-  
+
+(*O context é um ambiente que associa
+variáveis a seus tipos, Γ (Gama) *)
+type context = (string * tipo) list 
       
-let rec typeinfer (ctx: context) (e: expr) : tipo = 
+let rec typeinfer (ctx: context) (e: expr) : tipo option = 
   match e with
-    | Num _ -> TyInt    (* (T-int)  *)
-    | Bool _ -> TyBool  (* (T-bool) *)
-    | Unit -> TyUnit    (* (T-unit) *)
+    | Num _ -> Some(TyInt)    (* T-int  *)
+    | Bool _ -> Some(TyBool)  (* T-bool *)
+    | Unit -> Some(TyUnit)    (* T-unit *)
     
+    | Id x -> List.assoc_opt x ctx (* T-var *)
+
+    | Binop (op, e1, e2) -> (match op, typeinfer ctx e1, typeinfer ctx e2 with (* T-op+ e T-op< *)
+        | (Sum | Sub | Mul | Div), Some(TyInt), Some(TyInt) -> Some(TyInt)       (* Seria a T-op+ do pdf mas aqui incluo todas ARITMÉTICAS(tem que resolver a exceção do div???) *)
+        | (Eq | Neq | Lt | Gt), Some(TyInt), Some(TyInt) -> Some(TyBool)         (*Seria a T-op< mas aqui incluo todas RELACIONAIS *)
+        | (And | Or), Some(TyBool), Some(TyBool) -> Some(TyBool)                 (*Não tem uma regra na especificação pras LÓGICAS *)
+        | _ -> None)
+
+    | If (e1, e2, e3) -> (match typeinfer ctx e1, typeinfer ctx e2, typeinfer ctx e3 with (* T-if *)
+        | (Some(TyBool), Some(tipo_e2), Some(tipo_e3)) when tipo_e2 == tipo_e3 -> Some(tipo_e2)
+        | _ -> None)
+
+    | Let (x, tipo_x, e1, e2) -> (match typeinfer ctx e1 with  (* T-let *)
+        | Some(tipo_x) -> typeinfer ((x, tipo_x) :: ctx) e2
+        | _ -> None)
+
+    | New (e1) -> (match typeinfer ctx e1 with (* T-new *)
+        | Some(tipo) -> Some(TyRef(tipo))
+        | None -> None)
+
+    | Deref (e1) -> (match typeinfer ctx e1 with (* T-deref *)
+        | Some(TyRef(tipo)) -> Some(tipo)
+        | _ -> None)
     
-    | Id x -> (* (T-var) *)
-      (*List.assoc is a standard function in OCaml, List module*)
-      (try List.assoc x ctx 
-        with Not_found -> failwith ("Variável "^ x ^ " não declarada"))
+    | Asg (e1, e2) -> (match typeinfer ctx e1, typeinfer ctx e2 with (* T-atr *)
+        | Some(TyRef(tipo_referenciado)), Some(tipo_e2) when tipo_e2 == tipo_referenciado -> Some(TyUnit)
+        | _ -> None)
 
-    | Binop (op, e1, e2) -> (* (T-op+) e (T-op<) *)
-      let tipo_e1 = typeinfer ctx e1 in
-      let tipo_e2 = typeinfer ctx e2 in
-      (match op, tipo_e1, tipo_e2 with
-        | (Sum | Sub | Mul | Div), TyInt, TyInt -> TyInt       (* Seria a (T-op+) do pdf mas aqui incluo todas ARITMÉTICAS(tem que resolver a exceção do div???) *)
-        | (Eq | Neq | Lt | Gt), TyInt, TyInt -> TyBool         (*Seria a (T-op<) mas aqui incluo todas RELACIONAIS *)
-        | (And | Or), TyBool, TyBool -> TyBool                 (*Não tem uma regra na especificação pras LÓGICAS *)
-        | _ -> failwith "Erro de tipo na operação binária")      
-
-    | If (e1, e2, e3) -> (* (T-if) *)
-      let tipo_e1 = typeinfer ctx e1 in 
-        if tipo_e1 <> TyBool then failwith "Condição do if deve ser bool";
-      let tipo_e2 = typeinfer ctx e2 in 
-      let tipo_e3 = typeinfer ctx e3 in 
-      
-      if tipo_e2 = tipo_e3 then tipo_e2 else failwith "Os dois ramos precisam ser do mesmo tipo";
-
-    | Let (x, tipo_x, e1, e2) -> (* (T-let)*)
-      let tipo_e1 = typeinfer ctx e1 in
-      if tipo_e1 <> tipo_x then
-        failwith ("Let: tipo declarado "^ string_of_tipo tipo_x ^
-                " não bate com tipo inferido " ^ string_of_tipo tipo_e1)
-      else
-        let ctx' = (x, tipo_x) :: ctx in 
-        typeinfer ctx' e2
-    | New (e1) ->   (* (T-new)*)
-        let tipo_e1  = typeinfer ctx e1 in 
-        TyRef tipo_e1
-
-    | Deref (e1) ->   (* (T-deref) *)
-        let tipo_e1 = typeinfer ctx e1 in
-        (match tipo_e1 with
-          | TyRef tipo_referenciado -> tipo_referenciado
-          | _ -> failwith "Erro: espera uma referência (ref T)"
-        )
+    | Wh (e1, e2) -> (match typeinfer ctx e1, typeinfer ctx e2 with (* T-while *)
+        | Some(TyBool), Some(TyUnit) -> Some(TyUnit)
+        | _ -> None)
     
-    | Asg (e1, e2) ->   (* (T-atr) *)
-        let tipo_e1 = typeinfer ctx e1 in
-        let tipo_e2 = typeinfer ctx e2 in
-        (match tipo_e1 with
-          | TyRef tipo_referenciado ->
-              if tipo_referenciado = tipo_e2 then TyUnit
-              else failwith "Tipo incompatível: valor não corresponde ao tipo da referência"
-          | _ -> failwith "Erro: tentativa de atribuir a algo que não é referência")
+    | Seq (e1, e2) -> (match typeinfer ctx e1 with (* (T-seq) *)
+        | Some(TyUnit) -> typeinfer ctx e2
+        | _ -> None)
 
-    | Wh (e1, e2) ->    (* (T-while) *)
-        let tipo_e1 = typeinfer ctx e1 in
-        let tipo_e2 = typeinfer ctx e2 in
-        if (tipo_e1 <> TyBool) then failwith "condição deve ser do tipo TyBool"
-          else
-            if (tipo_e2 <> TyUnit) then failwith "o corpo do while deve ser Unit "
-            else TyUnit
+    | Read -> Some(TyInt)  (* T-read *)
     
-    | Seq (e1, e2) ->  (* (T-seq) *)
-        let tipo_e1 = typeinfer ctx e1 in
-        if tipo_e1 <> TyUnit then failwith "O primeiro termo da sequência deve ser unit"
-        else typeinfer ctx e2
+    | Print (e1)-> (match typeinfer ctx e1 with (* T-print *)
+        | Some(TyInt) -> Some(TyUnit)
+        | _ -> None)
 
-    | Read -> TyInt  (* (T-read) *)
-    
-    | Print (e1) ->   (* (T-print) *)
-        let tipo_e1 = typeinfer ctx e1 in
-        if tipo_e1 <> TyInt then failwith "termo a imprimir deve ser int"
-        else TyUnit
-    | Loc (_) -> failwith "Localizão sem tipo"
+    | _ -> None
+
+let typeinfer_init (e: expr) =
+  typeinfer [] e
 
 let rec set_nth_opt (list: 'a list) (index: int) (value: 'a): ('a list) option =
   match (index, list) with
