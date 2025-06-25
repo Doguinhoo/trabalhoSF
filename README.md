@@ -48,7 +48,7 @@ let for_example =
 ```ocaml
 check_expect (call_expr for_example []) (Some [0; 1; 2; 3; 4; 5]) "sem-for-print";;
 ```
-
+Esse trecho deve fazer a soma de 1 a 5 em um acc (acumulador):
 ```ocaml
 let for_sum_example =
   Let("acc", TyRef TyInt, New(Num 0),
