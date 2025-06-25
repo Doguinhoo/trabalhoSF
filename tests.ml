@@ -272,9 +272,9 @@ let () =
     "sem-print-n'";;
 
   (* extra *)
-  check_expect (call_expr fat [3]) (Some [6]) "sem1";;
-  check_expect (call_expr fat [4]) (Some [24]) "sem1";;
-  check_expect (call_expr fat [5]) (Some [120]) "sem1";;
+  check_expect (call_expr fat [3]) (Some [6]) "sem-fat1";;
+  check_expect (call_expr fat [4]) (Some [24]) "sem-fat1";;
+  check_expect (call_expr fat [5]) (Some [120]) "sem-fat1";;
 
   check_expect (call_expr for_example []) (Some [0; 1; 2; 3; 4; 5]) "sem-for-print";;
   check_expect (call_expr for_sum_example []) (Some [15]) "sem-for-sum";;
