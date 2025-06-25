@@ -25,6 +25,8 @@ type expr =
   | Seq of expr * expr
   | Read
   | Print of expr
+  | For of string * expr * expr * expr * expr
+  (* For(var, start, end_, step, body) *)
 
 let is_value (e: expr): bool =
   match e with
@@ -117,6 +119,12 @@ let rec subs (e1: expr) (x: string) (e2: expr): expr =
   | Seq (le1, le2) -> Seq (subs e1 x le1, subs e1 x le2)
   | Read -> Read
   | Print (le) -> Print (subs e1 x le)
+  | For (var, start, end_, step_expr, body) ->
+    For (var,
+         subs e1 x start,
+         subs e1 x end_,
+         subs e1 x step_expr,
+         subs e1 x body)
 
 let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (expr * expr list * int list * int list) option =
   match e with
@@ -202,6 +210,22 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
       | value :: tail -> Some(Num value, mem, tail, output)
       | _ -> None)
 
+    | For (var, start, end_, step_expr, body) ->
+      (* let var = ref start in while (!var <= end_) do body; var := !var + step done 
+      ref_init representa uma tradução para expressões que já existiam na linguagem
+      *)
+      let ref_init = Let(var, TyRef TyInt, New(start),
+          Wh(
+            Binop(Lt, Deref(Id var), Binop(Sum, end_, Num 1)), (* inclui end_ *)
+            Seq(
+              body,
+              Asg(Id var, Binop(Sum, Deref(Id var), step_expr))
+            )
+          )
+        )
+      in Some(ref_init, mem, input, output)
+
+
     | _ -> None
 
 let rec steps (e: expr) (mem: expr list) (input: int list) (output: int list): (expr * expr list * int list * int list) =
@@ -246,3 +270,20 @@ let fat = Let("x", TyInt, Read,
             print (! y))     
 
 *)    
+
+let for_example =
+  For("i", Num 0, Num 5, Num 1,
+    Print(Deref(Id "i"))
+  )
+
+let for_sum_example =
+  Let("acc", TyRef TyInt, New(Num 0),
+    Seq(
+      For("i", Num 1, Num 5, Num 1,
+        Asg(Id "acc", Binop(Sum, Deref(Id "acc"), Deref(Id "i")))
+      ),
+      Print(Deref(Id "acc"))
+    )
+  )
+
+
