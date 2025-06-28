@@ -34,9 +34,10 @@ Que está funcionando OK, de acordo com os testes em tests.ml:
 # 🔄 For
 O nosso For é um açúcar sintático para Let + While + Seq + Asg
 
-- Foi adicionado na função step uma tradução do for para essas estruturas presentes na especificação original;
-- Na função subs foi adicionado um caso específico novo;
 - Foi adicionado o For nas expr, bem no começo do código
+- Foi adicionado o um caso para o For no sistema de tipos
+- Na função subs foi adicionado um caso específico novo;
+- Foi adicionado na função step uma tradução do for para essas estruturas presentes na especificação original;
 
 Este trecho deve imprimir 0;1;2;3;4;5:
 ```ocaml
