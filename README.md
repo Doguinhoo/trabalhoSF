@@ -1,3 +1,7 @@
+# Grupo
+- Giovanni Rosell Paredes dos Santos
+- Leonardo Nunes Ribeiro
+
 # 🧠 Mini-Interpretador Imperativo com Tipagem Estática (OCaml)
 Este projeto implementa um interpretador small-step para uma linguagem imperativa simplificada, inspirado em linguagens como ML e C. Ele suporta variáveis, referências (ref), laços (while), leitura/escrita de memória, operações aritméticas, relacionais e booleanas — tudo com um sistema de tipagem estática.
 
