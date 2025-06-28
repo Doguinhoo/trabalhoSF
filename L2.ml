@@ -84,9 +84,13 @@ let rec typeinfer (ctx: context) (e: expr) : tipo option =
 
     | Read -> Some(TyInt)  (* T-read *)
     
-    | Print (e1)-> (match typeinfer ctx e1 with (* T-print *)
+    | Print (e1) -> (match typeinfer ctx e1 with (* T-print *)
         | Some(TyInt) -> Some(TyUnit)
         | _ -> None)
+
+    | For (var, start, end_, step, body) -> (match typeinfer ctx start, typeinfer ctx end_, typeinfer ctx step, typeinfer ((var, (TyRef TyInt)) :: ctx) body  with
+      | (Some(TyInt), Some(TyInt), Some(TyInt), Some(TyUnit)) -> Some(TyUnit)
+      | _ -> None)
 
     | _ -> None
 

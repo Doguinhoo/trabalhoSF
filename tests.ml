@@ -101,6 +101,9 @@ let () =
   (* Teste print*)
   check_expect_tipo (Print (Num 42)) (Some TyUnit);;
 
+  check_expect_tipo for_example (Some TyUnit);;
+  check_expect_tipo for_sum_example (Some TyUnit);;
+
   (* TESTES DE ERRO *)
 
   (* condição não booleana *)
@@ -270,6 +273,15 @@ let () =
   check_expect (step (Read) [] [5] [])
     (Some ((Num 5), [], [], []))
     "sem-print-n'";;
+
+  check_expect (step for_example [] [] [])
+    (Some
+     (Let ("i", TyRef TyInt, New (Num 0),
+      Wh (Binop (Lt, Deref (Id "i"), Binop (Sum, Num 5, Num 1)),
+        Seq (Print (Deref (Id "i")),
+          Asg (Id "i", Binop (Sum, Deref (Id "i"), Num 1))))),
+      [], [], []))
+    "sem-for";;
 
   (* extra *)
   check_expect (call_expr fat [3]) (Some [6]) "sem-fat1";;
