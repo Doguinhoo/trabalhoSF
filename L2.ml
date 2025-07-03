@@ -55,7 +55,7 @@ let rec typeinfer (ctx: context) (e: expr) : tipo option =
         | _ -> None)
 
     | If (e1, e2, e3) -> (match typeinfer ctx e1, typeinfer ctx e2, typeinfer ctx e3 with (* T-if *)
-        | (Some(TyBool), Some(tipo_e2), Some(tipo_e3)) when tipo_e2 == tipo_e3 -> Some(tipo_e2)
+        | (Some(TyBool), Some(tipo_e2), Some(tipo_e3)) when tipo_e2 = tipo_e3 -> Some(tipo_e2)
         | _ -> None)
 
     | Let (x, tipo_x, e1, e2) -> (match typeinfer ctx e1 with  (* T-let *)
@@ -124,12 +124,18 @@ let rec subs (e1: expr) (x: string) (e2: expr): expr =
   | Seq (le1, le2) -> Seq (subs e1 x le1, subs e1 x le2)
   | Read -> Read
   | Print (le) -> Print (subs e1 x le)
-  | For (var, start, end_, step_expr, body) ->
+  | For (var, start, end_, step_expr, body) when not (String.equal x var) ->
     For (var,
          subs e1 x start,
          subs e1 x end_,
          subs e1 x step_expr,
          subs e1 x body)
+  | For (var, start, end_, step_expr, body) ->
+    For (var,
+         subs e1 x start,
+         subs e1 x end_,
+         subs e1 x step_expr,
+         body)
 
 let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (expr * expr list * int list * int list) option =
   match e with
@@ -230,7 +236,6 @@ let rec step (e: expr) (mem: expr list) (input: int list) (output: int list): (e
         )
       in Some(ref_init, mem, input, output)
 
-
     | _ -> None
 
 let rec steps (e: expr) (mem: expr list) (input: int list) (output: int list): (expr * expr list * int list * int list) =
@@ -279,7 +284,7 @@ let fat = Let("x", TyInt, Read,
 let for_example =
   For("i", Num 0, Num 5, Num 1,
     Print(Deref(Id "i"))
-  )
+  );;
 
 let for_sum_example =
   Let("acc", TyRef TyInt, New(Num 0),
@@ -289,6 +294,98 @@ let for_sum_example =
       ),
       Print(Deref(Id "acc"))
     )
+  );;
+
+let ex1 =
+    Let("x",TyRef(TyInt), New(Num(3)), 
+     Seq( 
+         Asg(Id("x") , Binop(Sum,Read,Num(1))),
+         Print(Deref(Id("x")))   
+       )
+    );;
+
+let ex1_type = typeinfer_init ex1;;
+let ex1_result = steps ex1 [] [5] [];;
+
+let ex2 =
+
+ Let("x",TyBool, Bool(true), 
+  Seq(
+      Let("x",TyInt, Num(3), 
+         Print(Binop(Sum,Id("x"),Num(1)))
+       )
+  ,
+    Id("x")
   )
+)   
+;;
 
+let ex2_type = typeinfer_init ex2;;
+let ex2_result = steps ex2 [] [] [];;
 
+let ex3 = If(Binop(Lt,Num(3),Num(5)),
+   Bool(true),
+   Unit)
+;;
+
+let ex3_type = typeinfer_init ex3;;
+let ex3_result = steps ex3 [] [] [];;
+
+let ex4 =
+Let("x",TyInt,Num(4),
+  Let("y",TyRef TyInt,New(Num(0)),
+    Let("a",TyRef TyInt,New(Num(0)),
+      Wh(Binop(Lt,Deref(Id("y")),Id("x")),
+        Seq(
+          Asg(Id("y"),Binop(Sum,Deref(Id("y")),Num(1)))
+        , 
+          Asg(Id("a"),Binop(Sum,Deref(Id("a")),Deref(Id("y"))))
+        )
+      )
+    )
+  )
+)
+;;
+
+let ex4_type = typeinfer_init ex4;;
+let ex4_result = steps ex4 [] [] [];;
+
+let ex5 =
+Let ("y", TyRef TyBool, New(Bool(true)),
+  If( 
+      Binop(Lt,Deref(New(Num(5))), Num(2)),
+      New(Bool(false)),
+      Id("y")
+  )
+)
+;;
+
+let ex5_type = typeinfer_init ex5;;
+let ex5_result = steps ex5 [] [] [];;
+
+let ex6 =
+Let("x",TyRef TyInt, New(Num(0)),
+  Let("a",TyRef TyInt,New(Num(1)),
+   Seq(
+      Asg(Id("x"), Read)
+    ,
+    Seq(
+      Wh(
+         Binop(Neq, Deref(Id("x")), Num(0) )
+        ,
+        Seq(
+         Asg(Id("a"),Binop(Mul,Deref(Id("a")),Deref(Id("x"))))
+        ,
+         Asg(Id("x"),Binop(Sub,Deref(Id("x")),Num(1)))
+        )
+      ) 
+    ,
+      Print(Deref(Id("a")))
+    )
+   )
+  )
+)
+;;
+
+let ex6_type = typeinfer_init ex6;;
+let ex6_result = steps ex6 [] [6] [];;
